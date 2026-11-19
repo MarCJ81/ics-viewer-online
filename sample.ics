@@ -1,0 +1,151 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Northwind Labs//Product Team Calendar//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:Product Team – March 2026
+BEGIN:VTIMEZONE
+TZID:America/New_York
+X-LIC-LOCATION:America/New_York
+BEGIN:DAYLIGHT
+TZOFFSETFROM:-0500
+TZOFFSETTO:-0400
+TZNAME:EDT
+DTSTART:19700308T020000
+RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=2SU
+END:DAYLIGHT
+BEGIN:STANDARD
+TZOFFSETFROM:-0400
+TZOFFSETTO:-0500
+TZNAME:EST
+DTSTART:19701101T020000
+RRULE:FREQ=YEARLY;BYMONTH=11;BYDAY=1SU
+END:STANDARD
+END:VTIMEZONE
+BEGIN:VEVENT
+UID:4f3c1a90-standup-2026@northwindlabs.example
+DTSTAMP:20260227T160000Z
+DTSTART;TZID=America/New_York:20260302T093000
+DTEND;TZID=America/New_York:20260302T094500
+SUMMARY:Weekly product stand-up
+DESCRIPTION:Forty-five minutes, no slides. Each owner reports what shipped,
+  what is blocked and what needs a decision this week.\nJoin from the usual
+  Zoom room or dial in from the calendar invite.
+LOCATION:Zoom – Room 2
+ORGANIZER;CN=Maya Chen:mailto:maya.chen@northwindlabs.example
+ATTENDEE;CN=Maya Chen;ROLE=CHAIR;PARTSTAT=ACCEPTED:mailto:maya.chen@northwi
+ ndlabs.example
+ATTENDEE;CN=Daniel Ruiz;ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED:mailto:danie
+ l.ruiz@northwindlabs.example
+ATTENDEE;CN=Priya Nair;ROLE=OPT-PARTICIPANT;PARTSTAT=TENTATIVE:mailto:priya
+ .nair@northwindlabs.example
+STATUS:CONFIRMED
+RRULE:FREQ=WEEKLY;BYDAY=MO;COUNT=12
+END:VEVENT
+BEGIN:VEVENT
+UID:7b21e450-design-review-2026@northwindlabs.example
+DTSTAMP:20260227T160500Z
+DTSTART;TZID=America/New_York:20260303T140000
+DTEND;TZID=America/New_York:20260303T153000
+SUMMARY:Design review: onboarding v3
+DESCRIPTION:Walk through the new empty states and the migration screen. Bri
+ ng the latest Figma link.
+LOCATION:Studio B
+ORGANIZER;CN=Ines Duarte:mailto:ines.duarte@northwindlabs.example
+ATTENDEE;CN=Maya Chen:mailto:maya.chen@northwindlabs.example
+STATUS:CONFIRMED
+END:VEVENT
+BEGIN:VEVENT
+UID:2d9e6c11-offsite-2026@northwindlabs.example
+DTSTAMP:20260227T160900Z
+DTSTART;VALUE=DATE:20260306
+DTEND;VALUE=DATE:20260309
+SUMMARY:Team offsite
+DESCRIPTION:Two nights in the mountains. Sessions in the morning\; hiking i
+ n the afternoon.
+LOCATION:Lake Tahoe Lodge
+STATUS:CONFIRMED
+END:VEVENT
+BEGIN:VEVENT
+UID:5a8f0b23-quarter-close-2026@northwindlabs.example
+DTSTAMP:20260227T161200Z
+DTSTART:20260310T210000Z
+DTEND:20260310T220000Z
+SUMMARY:Quarter close sync with London
+DESCRIPTION:Numbers lock at 17:00 London time. Finance walks through the br
+ idge before the board pack goes out.
+LOCATION:Video call
+ORGANIZER;CN=Tom Whitfield:mailto:tom.whitfield@northwindlabs.example
+ATTENDEE;CN=Maya Chen:mailto:maya.chen@northwindlabs.example
+ATTENDEE;CN=Amara Okafor;ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED:mailto:amar
+ a@northwindlabs.example
+STATUS:CONFIRMED
+END:VEVENT
+BEGIN:VEVENT
+UID:8c4d7e02-retro-2026@northwindlabs.example
+DTSTAMP:20260227T161400Z
+DTSTART;TZID=Europe/London:20260312T160000
+DTEND;TZID=Europe/London:20260312T170000
+SUMMARY:Sprint retrospective
+DESCRIPTION:What helped, what hurt, what we try next sprint. Notes go to th
+ e shared doc within an hour.
+LOCATION:Meet – sprint room
+STATUS:CONFIRMED
+RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=TH;UNTIL=20260521T170000Z
+END:VEVENT
+BEGIN:VEVENT
+UID:1e6b9a44-customer-call-2026@northwindlabs.example
+DTSTAMP:20260227T161600Z
+DTSTART;TZID=America/Los_Angeles:20260313T080000
+DTEND;TZID=America/Los_Angeles:20260313T090000
+SUMMARY:Customer call: Brightline
+DESCRIPTION:Renewal conversation. They want SSO and a audit log export befo
+ re Q3.
+LOCATION:Phone
+ORGANIZER;CN=Daniel Ruiz:mailto:daniel.ruiz@northwindlabs.example
+STATUS:TENTATIVE
+END:VEVENT
+BEGIN:VEVENT
+UID:9b0c5d77-planning-2026@northwindlabs.example
+DTSTAMP:20260227T161900Z
+DTSTART;TZID=America/New_York:20260316T100000
+DTEND;TZID=America/New_York:20260316T113000
+SUMMARY:Q2 planning workshop
+DESCRIPTION:Bring one page per bet: the problem, the evidence, the smallest
+  test. We pick three to start in April.
+LOCATION:Studio A
+ORGANIZER;CN=Maya Chen:mailto:maya.chen@northwindlabs.example
+ATTENDEE;CN=Maya Chen:mailto:maya.chen@northwindlabs.example
+ATTENDEE;CN=Priya Nair;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION:mailto:pr
+ iya.nair@northwindlabs.example
+STATUS:CONFIRMED
+END:VEVENT
+BEGIN:VEVENT
+UID:3f7a2c88-holiday-2026@northwindlabs.example
+DTSTAMP:20260227T162100Z
+DTSTART;VALUE=DATE:20260320
+SUMMARY:Company holiday – spring day
+DESCRIPTION:Offices closed. Support cover is on the published rota.
+STATUS:CONFIRMED
+END:VEVENT
+BEGIN:VEVENT
+UID:6d2f8b19-office-hours-2026@northwindlabs.example
+DTSTAMP:20260227T162300Z
+DTSTART;TZID=America/New_York:20260305T160000
+DTEND;TZID=America/New_York:20260305T170000
+SUMMARY:Open office hours
+DESCRIPTION:No agenda. Book a ten-minute slot or just drop in.
+LOCATION:Zoom – Room 4
+STATUS:CONFIRMED
+RRULE:FREQ=MONTHLY;BYMONTHDAY=5;COUNT=6
+END:VEVENT
+BEGIN:VEVENT
+UID:0a1b2c3d-cancelled-2026@northwindlabs.example
+DTSTAMP:20260227T162500Z
+DTSTART;TZID=America/New_York:20260311T110000
+DTEND;TZID=America/New_York:20260311T120000
+SUMMARY:Vendor demo (moved to April)
+DESCRIPTION:Moved because the vendor could not join this week.
+STATUS:CANCELLED
+END:VEVENT
+END:VCALENDAR
