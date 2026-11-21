@@ -68,8 +68,7 @@ preview-dark.png               다크 테마
    - `index.html`, `privacy.html`의 `<link rel="canonical">`, OG `og:url`
    - `sitemap.xml`의 `<loc>` 2개
    - `robots.txt`의 `Sitemap:` 줄
-5. `privacy.html`의 연락처(`contact@icsviewer.app`)는 **아직 실제 수신 주소가 아닌 자리표시자**입니다.
-   애드센스 심사 전에 수신 가능한 메일 주소로 교체해야 합니다.
+5. `privacy.html`의 연락처는 `goodday810202@gmail.com`으로 설정되어 있습니다(애드센스 심사용 실제 수신 주소).
 
 ## 테스트
 
