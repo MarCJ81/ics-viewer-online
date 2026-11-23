@@ -1067,6 +1067,343 @@
   }
 
   /* ------------------------------------------------------------------ */
+  /* Recurrence expansion (RRULE)                                        */
+  /* ------------------------------------------------------------------ */
+
+  /* Vendored engines: rrule (BSD-3-Clause) expands the rule set,
+     ical.js (MPL-2.0) is the reference parser used to cross-check it.
+     Neither is required: a small built-in expander covers DAILY/WEEKLY/
+     MONTHLY/YEARLY rules when the files are missing. */
+  var RENGINES = { rrule: null, ical: null };
+
+  function useEngines(map) {
+    if (!map) return;
+    if (map.rrule) RENGINES.rrule = map.rrule;
+    if (map.ical) RENGINES.ical = map.ical;
+  }
+
+  function rEngine(name) {
+    if (RENGINES[name]) return RENGINES[name];
+    var g = typeof globalThis !== 'undefined' ? globalThis : null;
+    if (!g) return null;
+    if (name === 'rrule' && g.rrule && typeof g.rrule.rrulestr === 'function') RENGINES.rrule = g.rrule;
+    if (name === 'ical' && g.ICAL && typeof g.ICAL.Recur === 'function') RENGINES.ical = g.ICAL;
+    return RENGINES[name] || null;
+  }
+
+  function engineStatus() {
+    return { rrule: !!rEngine('rrule'), ical: !!rEngine('ical') };
+  }
+
+  var DAY_MS = 86400000;
+
+  function wallMsOfDate(d) {
+    return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(),
+      d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds());
+  }
+
+  /** A Date whose local components equal the wall clock of `ms`. */
+  function wallToLocalDate(ms) {
+    var d = new Date(ms);
+    return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(),
+      d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds());
+  }
+
+  /** Inverse of wallToLocalDate: read local components as wall ms. */
+  function localDateToWallMs(d) {
+    return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(),
+      d.getHours(), d.getMinutes(), d.getSeconds());
+  }
+
+  function addMonthsWall(ms, n) {
+    var d = new Date(ms);
+    var y = d.getUTCFullYear();
+    var mo = d.getUTCMonth() + n;
+    return Date.UTC(y + Math.floor(mo / 12), ((mo % 12) + 12) % 12, d.getUTCDate(),
+      d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds());
+  }
+
+  function pad4(n) { return String(n).padStart(4, '0'); }
+
+  /** Rewrite UNTIL so a UTC value is compared against the event's wall clock. */
+  function ruleForWall(raw, tzid) {
+    return String(raw || '').replace(/UNTIL=([0-9TZ]+)/i, function (match, value) {
+      var parsed = parseDateValue(value);
+      if (!parsed) return match;
+      if (parsed.isUtc && tzid && isKnownTimeZone(tzid)) {
+        var ms = Date.UTC(parsed.y, parsed.mo - 1, parsed.d, parsed.h, parsed.mi, parsed.s);
+        var w = wallParts(ms, tzid);
+        return 'UNTIL=' + pad4(w.y) + pad2(w.mo) + pad2(w.d) +
+          (parsed.hasTime ? 'T' + pad2(w.h) + pad2(w.mi) + pad2(w.s) : '');
+      }
+      if (parsed.isUtc) {
+        return 'UNTIL=' + pad4(parsed.y) + pad2(parsed.mo) + pad2(parsed.d) +
+          (parsed.hasTime ? 'T' + pad2(parsed.h) + pad2(parsed.mi) + pad2(parsed.s) : '');
+      }
+      return match;
+    });
+  }
+
+  function expandWithRRule(raw, dtstartWall, untilWall, limit) {
+    var R = rEngine('rrule');
+    if (!R) return null;
+    var rule;
+    try { rule = R.rrulestr(raw, { dtstart: wallToLocalDate(dtstartWall) }); }
+    catch (e) { return null; }
+    var list;
+    try {
+      list = rule.between(wallToLocalDate(dtstartWall - DAY_MS), wallToLocalDate(untilWall), true);
+    } catch (e) { return null; }
+    return list.map(localDateToWallMs).filter(function (ms) { return ms >= dtstartWall; }).slice(0, limit);
+  }
+
+  function expandWithIcal(raw, dtstartWall, untilWall, limit) {
+    var I = rEngine('ical');
+    if (!I) return null;
+    var recur;
+    try { recur = I.Recur.fromString(raw); } catch (e) { return null; }
+    var p = wallParts(dtstartWall, 'UTC');
+    var start;
+    try {
+      start = new I.Time({ year: p.y, month: p.mo, day: p.d, hour: p.h, minute: p.mi, second: p.s, isDate: false });
+    } catch (e) { return null; }
+    var iterator;
+    try { iterator = recur.iterator(start); } catch (e) { return null; }
+    var out = [];
+    for (var i = 0; i < limit + 1; i++) {
+      var next;
+      try { next = iterator.next(); } catch (e) { break; }
+      if (!next) break;
+      var ms = Date.UTC(next.year, next.month - 1, next.day, next.hour || 0, next.minute || 0, next.second || 0);
+      if (ms > untilWall) break;
+      if (ms >= dtstartWall) out.push(ms);
+    }
+    return out.slice(0, limit);
+  }
+
+  var WEEKDAY_NUM = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
+
+  /* Fallback expander: DAILY · WEEKLY · MONTHLY · YEARLY with
+     INTERVAL · COUNT · UNTIL · BYDAY · BYMONTHDAY · BYMONTH. */
+  function expandBuiltin(raw, dtstartWall, untilWall, limit) {
+    var rule = parseRRule(raw);
+    if (!rule) return null;
+    var freq = rule.FREQ;
+    var interval = parseInt(rule.INTERVAL || '1', 10) || 1;
+    var count = rule.COUNT ? parseInt(rule.COUNT, 10) : 0;
+    var until = untilWall;
+    if (rule.UNTIL) {
+      var u = parseDateValue(rule.UNTIL);
+      if (u) until = Date.UTC(u.y, u.mo - 1, u.d, u.h, u.mi, u.s);
+    }
+    var byDay = rule.BYDAY ? rule.BYDAY.split(',').map(function (d) {
+      return WEEKDAY_NUM[String(d).trim().toUpperCase().slice(-2)];
+    }).filter(function (n) { return n != null; }) : null;
+    var byMonthDay = rule.BYMONTHDAY ? rule.BYMONTHDAY.split(',').map(function (n) { return parseInt(n, 10); }) : null;
+    var byMonth = rule.BYMONTH ? rule.BYMONTH.split(',').map(function (n) { return parseInt(n, 10); }) : null;
+
+    var startDate = new Date(dtstartWall);
+    var sy = startDate.getUTCFullYear(), smo = startDate.getUTCMonth(), sd = startDate.getUTCDate();
+    var startDayMs = Date.UTC(sy, smo, sd);
+    var timeOfDay = dtstartWall - startDayMs;
+    var startDow = new Date(startDayMs).getUTCDay();
+    var weekStart = startDayMs - startDow * DAY_MS;
+
+    var out = [];
+    var cursor = startDayMs;
+    var guard = 0;
+    while (out.length < limit && cursor <= until && guard++ < 4000) {
+      var d = new Date(cursor);
+      var dow = d.getUTCDay();
+      var dayOfMonth = d.getUTCDate();
+      var monthIndex = d.getUTCMonth();
+      var matched = false;
+
+      if (freq === 'DAILY') {
+        var dayDiff = Math.round((cursor - startDayMs) / DAY_MS);
+        matched = dayDiff % interval === 0;
+      } else if (freq === 'WEEKLY') {
+        var weeks = Math.floor((cursor - weekStart) / (7 * DAY_MS));
+        matched = weeks % interval === 0 && (byDay ? byDay.indexOf(dow) >= 0 : dow === startDow);
+      } else if (freq === 'MONTHLY') {
+        var months = (d.getUTCFullYear() - sy) * 12 + (monthIndex - smo);
+        matched = months % interval === 0 &&
+          (byMonthDay ? byMonthDay.indexOf(dayOfMonth) >= 0 : dayOfMonth === sd) &&
+          (!byMonth || byMonth.indexOf(monthIndex + 1) >= 0);
+      } else if (freq === 'YEARLY') {
+        var years = d.getUTCFullYear() - sy;
+        matched = years % interval === 0 && monthIndex === smo &&
+          (byMonthDay ? byMonthDay.indexOf(dayOfMonth) >= 0 : dayOfMonth === sd) &&
+          (!byMonth || byMonth.indexOf(monthIndex + 1) >= 0);
+      }
+
+      if (matched) {
+        var ms = cursor + timeOfDay;
+        if (ms >= dtstartWall && ms <= until) out.push(ms);
+      }
+      cursor += DAY_MS;
+    }
+    if (count) out = out.slice(0, count);
+    return out.slice(0, limit);
+  }
+
+  function exdateWallMs(value, tzid, isAllDay) {
+    var parsed = parseDateValue(value);
+    if (!parsed) return null;
+    if (!parsed.hasTime || isAllDay) return Date.UTC(parsed.y, parsed.mo - 1, parsed.d);
+    if (parsed.isUtc) return Date.UTC(parsed.y, parsed.mo - 1, parsed.d, parsed.h, parsed.mi, parsed.s);
+    if (tzid && isKnownTimeZone(tzid)) return zonedToUtc(parsed.y, parsed.mo, parsed.d, parsed.h, parsed.mi, parsed.s, tzid);
+    return Date.UTC(parsed.y, parsed.mo - 1, parsed.d, parsed.h, parsed.mi, parsed.s);
+  }
+
+  /** Rebuild a resolved time object for another wall clock, keeping the event's zone. */
+  function timeAtWall(base, wallMs) {
+    var p = wallParts(wallMs, 'UTC');
+    var time = {
+      kind: base.kind, hasTime: base.hasTime, isUtc: base.isUtc, isFloating: base.isFloating,
+      tzid: base.tzid, y: p.y, mo: p.mo, d: p.d, h: p.h, mi: p.mi, s: p.s,
+      wallMs: wallMs, offset: 0
+    };
+    if (base.kind === 'date') time.utcMs = wallMs;
+    else if (base.isUtc || base.isFloating || !base.tzid) time.utcMs = wallMs;
+    else if (isKnownTimeZone(base.tzid)) {
+      time.utcMs = zonedToUtc(p.y, p.mo, p.d, p.h, p.mi, p.s, base.tzid);
+      time.offset = Math.round((wallMs - time.utcMs) / 60000);
+    } else {
+      time.utcMs = wallMs;
+      time.unknownZone = true;
+    }
+    return time;
+  }
+
+  /**
+   * Expand one recurring event into its first occurrences.
+   * options.months   horizon in months from DTSTART (default 12)
+   * options.limit    maximum occurrences (default 60)
+   * Returns { occurrences, engine, crossCheck, truncated }
+   */
+  function expandEvent(ev, options) {
+    options = options || {};
+    var months = options.months != null ? options.months : 12;
+    var limit = options.limit != null ? options.limit : 60;
+    var result = { occurrences: [], engine: 'none', crossCheck: null, truncated: false };
+    if (!ev || !ev.start || !ev.recurring || !ev.rruleRaw) return result;
+
+    var dtstartWall = Date.UTC(ev.start.y, ev.start.mo - 1, ev.start.d, ev.start.h || 0, ev.start.mi || 0, ev.start.s || 0);
+    var untilWall = options.toWallMs != null ? options.toWallMs : addMonthsWall(dtstartWall, months);
+    var raw = ruleForWall(ev.rruleRaw, ev.start.tzid);
+
+    var primary = expandWithRRule(raw, dtstartWall, untilWall, limit);
+    var secondary = expandWithIcal(raw, dtstartWall, untilWall, limit);
+    var engine = 'rrule';
+    var list = primary;
+
+    if (!list && secondary) { list = secondary; engine = 'ical'; }
+    if (!list && !secondary) { list = expandBuiltin(raw, dtstartWall, untilWall, limit) || []; engine = 'builtin'; }
+
+    if (list && secondary && engine === 'rrule') {
+      var n = Math.min(list.length, secondary.length);
+      var agree = 0;
+      for (var i = 0; i < n; i++) if (list[i] === secondary[i]) agree++;
+      result.crossCheck = {
+        engine: 'ical.js',
+        compared: n,
+        agree: agree,
+        match: n > 0 && agree === n && list.length === secondary.length
+      };
+    } else if (list && secondary && engine === 'ical') {
+      result.crossCheck = { engine: 'ical.js', compared: list.length, agree: list.length, match: true };
+    }
+
+    var tzid = ev.start.tzid;
+    var isAllDay = ev.start.kind === 'date';
+    var exdates = (ev.exdates || []).map(function (v) {
+      return exdateWallMs(String(v).split(',')[0], tzid, isAllDay);
+    }).filter(function (ms) { return ms != null; });
+
+    var kept = [];
+    for (var k = 0; k < list.length && kept.length < limit; k++) {
+      if (exdates.indexOf(list[k]) !== -1) continue;
+      kept.push(list[k]);
+    }
+
+    result.occurrences = kept.map(function (ms, idx) {
+      var start = timeAtWall(ev.start, ms);
+      var duration = ev.durationMs || 0;
+      var end = null;
+      if (ev.end) {
+        var endMs = start.utcMs + duration;
+        end = timeAtWall(ev.end, ms + duration);
+        end.utcMs = endMs;
+      }
+      return { index: idx + 1, wallMs: ms, start: start, end: end };
+    });
+    result.engine = engine;
+    result.truncated = list.length >= limit;
+    return result;
+  }
+
+  /** Copy of an event positioned at one occurrence, for the table and exports. */
+  function occurrenceEvent(ev, occurrence, total) {
+    var copy = Object.assign({}, ev);
+    copy.baseId = ev.id;
+    copy.baseIndex = ev.index;
+    copy.id = ev.id + '-o' + occurrence.index;
+    copy.start = occurrence.start;
+    copy.end = occurrence.end;
+    copy.occurrence = {
+      index: occurrence.index,
+      total: total,
+      isFirst: occurrence.index === 1,
+      rule: ev.rruleRaw
+    };
+    copy.baseEvent = ev;
+    return copy;
+  }
+
+  /**
+   * Expand every event in a list. Non-recurring events pass through unchanged;
+   * recurring ones become one event per occurrence.
+   */
+  function expandEvents(events, options) {
+    var out = [];
+    var meta = { recurring: 0, occurrences: 0, engines: {}, crossChecked: 0, mismatch: 0, errors: [] };
+    (events || []).forEach(function (ev) {
+      if (!ev.recurring || !ev.rruleRaw || !ev.start) { out.push(ev); return; }
+      var res = expandEvent(ev, options);
+      meta.recurring++;
+      if (!res.occurrences.length) {
+        if (res.engine === 'none' || res.engine === 'builtin') meta.errors.push(ev.summary);
+        out.push(ev);
+        return;
+      }
+      meta.occurrences += res.occurrences.length;
+      meta.engines[res.engine] = (meta.engines[res.engine] || 0) + 1;
+      if (res.crossCheck) {
+        meta.crossChecked++;
+        if (!res.crossCheck.match) meta.mismatch++;
+      }
+      res.occurrences.forEach(function (occ) {
+        out.push(occurrenceEvent(ev, occ, res.occurrences.length));
+      });
+    });
+    return { events: out, meta: meta };
+  }
+
+  /** Human summary for the UI: "12 occurrences · Mar 2 – May 18" */
+  function recurrenceSummary(ev, options) {
+    if (!ev || !ev.recurring) return '';
+    var res = expandEvent(ev, options);
+    if (!res.occurrences.length) return ev.recurrenceLabel || 'Recurring';
+    var first = res.occurrences[0].start;
+    var last = res.occurrences[res.occurrences.length - 1].start;
+    var a = formatTime(first).date;
+    var b = formatTime(last).date;
+    var text = res.occurrences.length + (res.truncated ? '+' : '') + ' occurrences';
+    return text + ' · ' + a + ' – ' + b;
+  }
+
+  /* ------------------------------------------------------------------ */
   /* Export                                                              */
   /* ------------------------------------------------------------------ */
 
@@ -1106,6 +1443,7 @@
       }).filter(Boolean).join('; ');
       case 'recurrence': return ev.recurrenceLabel;
       case 'uid': return ev.uid;
+      case 'occurrence': return ev.occurrence ? ev.occurrence.index + ' of ' + ev.occurrence.total : '';
       case 'calendar': return ev.source || '';
       default: return '';
     }
@@ -1124,9 +1462,15 @@
   }
 
   /** RFC 4180 CSV with optional UTF-8 BOM for Excel. */
+  function withOccurrenceColumns(columns, events) {
+    var hasOccurrence = (events || []).some(function (ev) { return !!ev.occurrence; });
+    if (!hasOccurrence) return columns;
+    return columns.concat([{ key: 'occurrence', label: 'Occurrence' }]);
+  }
+
   function toCSV(events, options) {
     options = options || {};
-    var columns = options.columns || CSV_COLUMNS;
+    var columns = options.columns || withOccurrenceColumns(CSV_COLUMNS, events);
     var eol = options.eol || '\r\n';
     var rows = [];
     rows.push(columns.map(function (c) { return escapeCSV(c.label); }).join(','));
@@ -1140,7 +1484,7 @@
   /** Tab-separated text for pasting into Excel, Sheets or Notion. */
   function toTSV(events, options) {
     options = options || {};
-    var columns = options.columns || CSV_COLUMNS;
+    var columns = options.columns || withOccurrenceColumns(CSV_COLUMNS, events);
     function clean(value) {
       return String(value == null ? '' : value).replace(/\t/g, ' ').replace(/\r?\n/g, ' ');
     }
@@ -1172,6 +1516,7 @@
         categories: ev.categories,
         recurrenceRule: ev.rruleRaw || null,
         recurrence: ev.recurrenceLabel || null,
+        occurrence: ev.occurrence ? { index: ev.occurrence.index, total: ev.occurrence.total } : null,
         uid: ev.uid || null,
         url: ev.url || null,
         calendar: ev.source || null
@@ -1340,6 +1685,15 @@
     sortEvents: sortEvents,
     filterEvents: filterEvents,
     toCSV: toCSV,
+    useEngines: useEngines,
+    engineStatus: engineStatus,
+    expandEvent: expandEvent,
+    expandEvents: expandEvents,
+    expandBuiltin: expandBuiltin,
+    occurrenceEvent: occurrenceEvent,
+    recurrenceSummary: recurrenceSummary,
+    timeAtWall: timeAtWall,
+    ruleForWall: ruleForWall,
     toTSV: toTSV,
     toJSON: toJSON,
     CSV_COLUMNS: CSV_COLUMNS,

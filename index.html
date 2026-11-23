@@ -263,6 +263,14 @@
                 <option value="utc">UTC</option>
               </select>
             </span>
+            <span class="select-wrap">
+              <select id="repeat" aria-label="Repeating events">
+                <option value="expand-12">Repeats: expand 12 months</option>
+                <option value="expand-3">Repeats: expand 3 months</option>
+                <option value="expand-24">Repeats: expand 2 years</option>
+                <option value="none">Repeats: original rows only</option>
+              </select>
+            </span>
           </div>
 
           <div class="export-bar">
@@ -300,6 +308,7 @@
           </div>
           <ul class="event-cards" id="event-cards"></ul>
 
+          <p class="repeat-note" id="repeat-note" hidden></p>
           <p class="table-note" id="table-note">
             All-day events store their end date as <code>DTEND</code>, which iCalendar treats as exclusive:
             a one-day event on 6 March ends on 7 March. CSV and JSON exports keep the values exactly as the
@@ -495,6 +504,8 @@
   </p>
 </noscript>
 
+<script src="assets/vendor/rrule.min.js"></script>
+<script src="assets/vendor/ical.min.js"></script>
 <script src="assets/ics-core.js"></script>
 <script src="assets/app.js"></script>
 </body>
