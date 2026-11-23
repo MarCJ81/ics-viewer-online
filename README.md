@@ -20,8 +20,11 @@ assets/
   ics-core.js                  파서·검증기·내보내기 (DOM 의존 없음 → Node 테스트에서 그대로 실행)
   app.js                       UI 배선(업로드·붙여넣기·드래그, 표/카드, 상세 다이얼로그, 내보내기)
   fonts/inter-latin*.woff2     Inter 가변 폰트 라틴 서브셋 (SIL OFL, CDN 아님)
-test.js                        Node 단위 테스트 45개
-uitest.py                      Playwright 실제 Chrome 검수 90항목 + 스크린샷
+assets/vendor/rrule.min.js     rrule 2.8.1 (BSD-3-Clause) — RRULE 전개
+assets/vendor/ical.min.js      ical.js 1.5.0 (MPL-2.0) — 표준 파서·전개 교차검증
+assets/vendor/LICENSE-*.txt    두 엔진의 라이선스 고지
+test.js                        Node 단위 테스트 59개
+uitest.py                      Playwright 실제 Chrome 검수 109항목 + 스크린샷
 preview-desktop.png            데스크톱 1280×800 (첫 화면)
 preview-desktop-results.png    데스크톱 결과 표 영역
 preview-desktop-full.png       데스크톱 전체 페이지
@@ -45,12 +48,20 @@ preview-dark.png               다크 테마
 - **뷰어**: 요약 카드(이벤트 수·기간·반복 수·타임존·검증 상태), 날짜·제목 정렬, 검색(제목·장소·설명·참석자·UID),
   필터(전체/시간 지정/종일/반복/취소), 표시 시간대 전환(이벤트 시간대/내 시간대/UTC), 행 클릭 상세 보기.
   데스크톱은 표, 모바일은 카드 목록.
+- **반복 일정 전개(RRULE)**: `Repeats` 선택으로 3개월·12개월(기본)·2년 또는 원본 행만 볼 수 있습니다.
+  반복 일정은 실제 날짜별 행으로 펼쳐지고 `OCCURRENCE 3/12` 배지가 붙습니다. 표 아래에는 어떤 엔진이 전개했고
+  두 엔진이 일치했는지 함께 표시합니다(예: 3 repeating events expanded into 24 dated rows · rrule.js and ical.js agree on all 3 rules).
+  - `rrule`(BSD-3-Clause)이 RRULE을 전개하고, `ical.js`(MPL-2.0)가 같은 규칙을 독립적으로 전개해 **교차검증**합니다.
+  - 일광절약시간 경계는 벽시계 기준으로 전개한 뒤 TZID로 UTC를 다시 계산합니다(뉴욕 09:30 EST → 09:30 EDT).
+  - `UNTIL`은 이벤트 시간대의 벽시계로 정규화해 비교하고, `EXDATE`는 해당 회차를 제거합니다.
+  - 두 엔진이 없으면 내장 전개기(DAILY·WEEKLY·MONTHLY·YEARLY + INTERVAL·COUNT·UNTIL·BYDAY·BYMONTHDAY·BYMONTH)로 동작합니다.
 - **검증기**: VCALENDAR·VERSION:2.0·PRODID·CALSCALE, 이벤트별 UID·DTSTAMP·DTSTART·DTEND 순서,
   잘못된 날짜(2월 30일 등)·미지원 TZID·중복 UID·닫히지 않은 컴포넌트·짝이 안 맞는 END·75옥텟 초과 줄을
   Error / Warning / Pass로 분류해 화면에 표시합니다.
 - **내보내기**: CSV 15개 컬럼(Start/End/Start UTC/End UTC/Time Zone/All Day/Summary/Location/Description/
-  Status/Organizer/Attendees/Recurrence/UID/Calendar), RFC 4180 이스케이프, Excel용 UTF-8 BOM 옵션,
-  JSON(ISO 8601 + 오프셋 + UTC), 표 복사(TSV). 화면에 보이는 필터·정렬 결과가 그대로 내보내집니다.
+  Status/Organizer/Attendees/Recurrence/UID/Calendar) + 전개된 회차가 있으면 `Occurrence`(3 of 12) 한 칸이 더 붙습니다.
+  RFC 4180 이스케이프, Excel용 UTF-8 BOM 옵션, JSON(ISO 8601 + 오프셋 + UTC + `occurrence`), 표 복사(TSV).
+  화면에 보이는 필터·정렬 결과가 그대로 내보내집니다.
 - **SEO**: JS 실행 전 HTML에 H1·설명·How-to·지원 필드 표·FAQ 6문항이 존재, `WebApplication` + `FAQPage` JSON-LD,
   canonical·OG·robots·sitemap, 시맨틱 마크업.
 
@@ -69,12 +80,13 @@ preview-dark.png               다크 테마
    - `sitemap.xml`의 `<loc>` 2개
    - `robots.txt`의 `Sitemap:` 줄
 5. `privacy.html`의 연락처는 `goodday810202@gmail.com`으로 설정되어 있습니다(애드센스 심사용 실제 수신 주소).
+6. `assets/vendor/`의 두 엔진은 파일을 수정하지 않고 그대로 두며, MPL-2.0(ical.js) 고지를 `LICENSE-ical.txt`로 유지합니다.
 
 ## 테스트
 
 ```bash
-node test.js        # 코어 단위 테스트 45개 (index.html이 쓰는 ics-core.js를 그대로 평가)
-python3 uitest.py   # 실제 headless Chrome 검수 90항목 + 스크린샷 재생성 (Node 불필요)
+node test.js        # 코어 단위 테스트 59개 (index.html이 쓰는 ics-core.js를 그대로 평가)
+python3 uitest.py   # 실제 headless Chrome 검수 109항목 + 스크린샷 재생성 (Node 불필요)
 ```
 
 `test.js`는 `assets/ics-core.js`를 읽어 실행하므로 브라우저에서 도는 코드와 완전히 같은 코드를 검증합니다.
@@ -82,6 +94,8 @@ python3 uitest.py   # 실제 headless Chrome 검수 90항목 + 스크린샷 재�
 floating 시간, `DURATION` 유추, 존재하지 않는 날짜(2026-02-30), 다중 이벤트·다중 파일, RRULE 4종 서술,
 깨진 파일(VCALENDAR 없음·VERSION 1.0·UID 누락·DTSTART 누락·짝 안 맞는 END·미닫힘·75옥텟 초과),
 CSV 따옴표/줄바꿈 이스케이프·BOM·컬럼 수·TSV 평탄화·JSON 오프셋, 샘플 무경고 통과.
+반복 전개는 별도 그룹에서 검증합니다: COUNT=12 전개, UNTIL+INTERVAL=2 종료, MONTHLY BYMONTHDAY, 서머타임 경계,
+3·6·12개월 지평, EXDATE 제거, rrule↔ical.js 교차검증 일치, 내장 전개기 단독 동작, 회차 CSV 컬럼·JSON 필드.
 
 `uitest.py`는 1280×800과 390×844 뷰포트에서 샘플 로드·검색/정렬/필터·시간대 전환·검증 리포트·상세 다이얼로그·
 실제 파일 선택 업로드·붙여넣기·드래그 앤 드롭·CSV(BOM 유/무)/JSON 다운로드·클립보드 복사·깨진 파일 오류 표시·
@@ -90,7 +104,8 @@ CSV 따옴표/줄바꿈 이스케이프·BOM·컬럼 수·TSV 평탄화·JSON �
 
 ## 알려진 한계
 
-- 반복 일정은 "1건 + RRULE 설명"으로 표시합니다. 발생 회차 전개(다음 10회 등)는 하지 않습니다.
+- 반복 전개 지평은 최대 2년·200회차입니다. 그 밖의 회차는 파일의 RRULE 설명으로 확인해야 합니다.
+- 반복 예외(`RECURRENCE-ID`로 수정된 단일 회차)는 아직 별도 행으로 합치지 않고 EXDATE만 반영합니다.
 - `VTODO`·`VJOURNAL`·`VFREEBUSY`는 읽지 않습니다(VEVENT만 대상).
 - `TZID`는 브라우저의 IANA 시간대 데이터(`Intl`)로 변환합니다. 브라우저가 모르는 사설 TZID는 경고 후
   파일에 적힌 시각 그대로 표시합니다.

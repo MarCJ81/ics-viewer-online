@@ -28,6 +28,9 @@
     filter: 'all',
     sort: 'start-asc',
     tzMode: 'event',
+    repeat: 'expand-12',
+    revision: 0,
+    view: { events: [], meta: null, expanded: false },
     tab: 'events',
     selectedId: null
   };
@@ -82,6 +85,7 @@
   }
 
   function reparse() {
+    state.revision++;
     state.parsed = [];
     state.events = [];
     state.reports = [];
@@ -138,6 +142,7 @@
     }
 
     renderSourceBar();
+    state.view = buildView();
     renderStats();
     renderValidation();
     renderTable();
@@ -164,7 +169,10 @@
   function renderStats() {
     var s = C.stats(state.events);
     $('stat-events').textContent = formatNumber(s.total);
-    $('stat-events-sub').textContent = s.allDay + ' all-day · ' + s.timed + ' timed';
+    var view = state.view && state.view.meta;
+    $('stat-events-sub').textContent = view && view.occurrences
+      ? view.occurrences + ' occurrences · ' + s.recurring + ' repeating'
+      : s.allDay + ' all-day · ' + s.timed + ' timed';
 
     if (s.startMs != null) {
       var a = C.formatTime(msToTime(s.startMs), state.tzMode);
@@ -348,9 +356,33 @@
   /* Table                                                               */
   /* ------------------------------------------------------------------ */
 
-  function visibleEvents() {
+  var REPEAT_MONTHS = { 'expand-3': 3, 'expand-12': 12, 'expand-24': 24 };
+  var viewCache = { key: '', view: null };
+
+  /* Expand RRULE recurring events into the occurrence rows the user sees.
+     The toolbar switch chooses the horizon, or keeps one row per VEVENT. */
+  function buildView() {
+    var months = REPEAT_MONTHS[state.repeat];
     var filtered = C.filterEvents(state.events, { query: state.query, filter: state.filter });
-    return C.sortEvents(filtered, state.sort);
+    if (!months) {
+      return { events: C.sortEvents(filtered, state.sort), meta: null, expanded: false, months: 0 };
+    }
+    var key = [state.revision, state.query, state.filter, state.sort, state.repeat].join('|');
+    if (viewCache.key === key) return viewCache.view;
+    var res = C.expandEvents(filtered, { months: months, limit: 200 });
+    var view = {
+      events: C.sortEvents(res.events, state.sort),
+      meta: res.meta,
+      expanded: res.meta.occurrences > 0,
+      months: months
+    };
+    viewCache = { key: key, view: view };
+    return view;
+  }
+
+  function visibleEvents() {
+    state.view = buildView();
+    return state.view.events;
   }
 
   function whenText(ev) {
@@ -379,7 +411,8 @@
     var out = [];
     if (ev.status === 'CANCELLED') out.push(badge('Cancelled', 'badge-cancelled'));
     if (ev.status === 'TENTATIVE') out.push(badge('Tentative', 'badge-tentative'));
-    if (ev.recurring) out.push(badge('Recurring', 'badge-recurring'));
+    if (ev.occurrence) out.push(badge('Occurrence ' + ev.occurrence.index + '/' + ev.occurrence.total, 'badge-occurrence'));
+    else if (ev.recurring) out.push(badge('Recurring', 'badge-recurring'));
     if (ev.allDay) out.push(badge('All-day', 'badge-allday'));
     return out;
   }
@@ -394,9 +427,13 @@
     $('tab-events-count').textContent = String(events.length);
     document.querySelector('.table-wrap').classList.toggle('single-source', state.files.length <= 1);
     var total = state.events.length;
-    $('export-scope').textContent = events.length === total
-      ? (total === 1 ? 'this event' : 'all ' + total + ' events')
-      : events.length + ' of ' + total + ' events';
+    var meta = state.view && state.view.meta;
+    var expandedCount = meta ? (total - meta.recurring + meta.occurrences) : total;
+    $('export-scope').textContent = events.length === expandedCount
+      ? (expandedCount === 1 ? 'this event' : 'all ' + expandedCount + ' rows')
+      : events.length + ' of ' + expandedCount + ' rows';
+
+    renderRepeatNote(meta, events.length);
 
     if (!events.length) {
       var tr = document.createElement('tr');
@@ -417,6 +454,26 @@
     });
 
     $('table-note').hidden = !events.length;
+  }
+
+  function renderRepeatNote(meta, shown) {
+    var note = $('repeat-note');
+    if (!note) return;
+    if (!meta || !meta.recurring) { note.hidden = true; note.textContent = ''; return; }
+    var parts = [];
+    parts.push(meta.recurring + (meta.recurring === 1 ? ' repeating event' : ' repeating events') +
+      ' expanded into ' + meta.occurrences + ' dated rows');
+    if (meta.engines.ical) parts.push('ical.js expanded ' + meta.engines.ical);
+    if (meta.engines.rrule) parts.push('rrule.js expanded ' + meta.engines.rrule);
+    if (meta.engines.builtin) parts.push('built-in expander used for ' + meta.engines.builtin);
+    if (meta.crossChecked) {
+      parts.push(meta.mismatch
+        ? meta.mismatch + ' rule(s) disagree between engines'
+        : 'rrule.js and ical.js agree on all ' + meta.crossChecked + ' rule(s)');
+    }
+    if (meta.errors.length) parts.push('could not expand: ' + meta.errors.slice(0, 2).join(', '));
+    note.hidden = false;
+    note.textContent = parts.join(' · ');
   }
 
   function tableRow(ev) {
@@ -574,6 +631,9 @@
     row('Status', ev.status ? ev.status.charAt(0) + ev.status.slice(1).toLowerCase() : '');
     row('Location', ev.location);
     if (ev.categories.length) row('Categories', ev.categories.join(', '));
+    if (ev.occurrence) {
+      row('Occurrence', ev.occurrence.index + ' of ' + ev.occurrence.total + ' in the expanded window');
+    }
     if (ev.recurrenceLabel) row('Repeats', ev.recurrenceLabel);
     if (ev.rruleRaw) row('RRULE', ev.rruleRaw);
     if (ev.organizer) row('Organizer', personLabel(ev.organizer));
@@ -907,6 +967,21 @@
       renderStats();
       renderTable();
     });
+
+    var repeatSelect = $('repeat');
+    if (repeatSelect) {
+      repeatSelect.addEventListener('change', function () {
+        state.repeat = repeatSelect.value;
+        viewCache.key = '';
+        renderAll();
+        var meta = state.view && state.view.meta;
+        if (meta && meta.occurrences) {
+          toast(meta.occurrences + ' occurrences shown for the next ' + state.view.months + ' months');
+        } else if (state.repeat === 'none') {
+          toast('Showing one row per event — repeats are listed in the detail view');
+        }
+      });
+    }
 
     $('export-csv').addEventListener('click', exportCSV);
     $('export-json').addEventListener('click', exportJSON);

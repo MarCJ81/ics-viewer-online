@@ -555,6 +555,7 @@ button { font: inherit; color: inherit; }
 }
 .badge-sample { background: var(--amber-soft); color: var(--amber); border-color: color-mix(in srgb, var(--amber) 25%, transparent); }
 .badge-recurring { background: var(--violet-soft); color: var(--violet); }
+.badge-occurrence { background: var(--accent-soft); color: var(--accent); font-variant-numeric: tabular-nums; }
 .badge-allday { background: var(--accent-soft); color: var(--accent-text); }
 .badge-cancelled { background: var(--red-soft); color: var(--red); }
 .badge-tentative { background: var(--amber-soft); color: var(--amber); }
@@ -798,6 +799,10 @@ table.events .chev svg { width: 15px; height: 15px; }
 table.events tbody tr.is-cancelled .summary { text-decoration: line-through; color: var(--muted); }
 table.events tbody tr.is-selected { background: var(--accent-soft); }
 
+.repeat-note {
+  margin: 10px 2px 0; font-size: 12px; line-height: 1.6; color: var(--muted);
+  border-left: 2px solid var(--accent); padding-left: 9px;
+}
 .table-note {
   font-size: 12.5px;
   color: var(--muted);
