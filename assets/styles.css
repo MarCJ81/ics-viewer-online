@@ -1222,3 +1222,36 @@ dialog.event-dialog::backdrop { background: rgba(16, 24, 40, 0.45); backdrop-fil
   .table-wrap { display: block !important; border: 0; }
   body { background: #fff; color: #000; }
 }
+
+/* ------------------------------------------------------------------ Language switch (KO / EN) */
+.lang-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg-soft);
+}
+.lang-btn {
+  border: 0;
+  background: transparent;
+  color: var(--text-soft);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  padding: 7px 9px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.lang-btn:hover { color: var(--text); }
+.lang-btn.is-on {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(16, 18, 22, 0.08);
+}
+@media (max-width: 640px) {
+  .lang-btn { padding: 6px 7px; font-size: 11.5px; }
+}

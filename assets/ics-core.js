@@ -20,6 +20,17 @@
   var WEEKDAY_CODES = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
   var WEEKDAY_NAMES = { SU: 'Sun', MO: 'Mon', TU: 'Tue', WE: 'Wed', TH: 'Thu', FR: 'Fri', SA: 'Sat' };
 
+  /* ---- KO / EN -------------------------------------------------------- */
+  var LOCALE = 'en';
+  var MONTHS_KO = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월'];
+  var WEEKDAYS_KO = ['일', '월', '화', '수', '목', '금', '토'];
+  var WEEKDAY_NAMES_KO = { SU: '일', MO: '월', TU: '화', WE: '수', TH: '목', FR: '금', SA: '토' };
+
+  function setLocale(lang) { LOCALE = (lang === 'ko') ? 'ko' : 'en'; }
+  function isKo() { return LOCALE === 'ko'; }
+  function localeTag() { return isKo() ? 'ko-KR' : 'en-US'; }
+  function L(en, ko) { return isKo() ? ko : en; }
+
   function pad2(n) { return (n < 10 ? '0' : '') + n; }
 
   function utf8Length(str) {
@@ -249,13 +260,14 @@
     if (!isRealDate(parsedValue.y, parsedValue.mo, parsedValue.d)) {
       problems.push({
         severity: 'error', code: 'invalid-date',
-        message: label + ' is not a real calendar date (' + parsedValue.y + '-' + parsedValue.mo + '-' + parsedValue.d + ').'
+        message: L(label + ' is not a real calendar date (' + parsedValue.y + '-' + parsedValue.mo + '-' + parsedValue.d + ').',
+          label + ' 값이 실제 달력에 없는 날짜입니다 (' + parsedValue.y + '-' + parsedValue.mo + '-' + parsedValue.d + ').')
       });
     }
     if (parsedValue.hasTime && (parsedValue.h > 23 || parsedValue.mi > 59 || parsedValue.s > 60)) {
       problems.push({
         severity: 'error', code: 'invalid-time',
-        message: label + ' has an impossible time of day.'
+        message: L(label + ' has an impossible time of day.', label + ' 값에 있을 수 없는 시각이 들어 있습니다.')
       });
     }
 
@@ -272,7 +284,7 @@
     if (params && params.VALUE && params.VALUE[0] && params.VALUE[0].toUpperCase() === 'DATE' && parsedValue.hasTime) {
       problems.push({
         severity: 'error', code: 'value-date-with-time',
-        message: label + ' declares VALUE=DATE but carries a time of day.'
+        message: L(label + ' declares VALUE=DATE but carries a time of day.', label + ' 값이 VALUE=DATE를 선언했지만 시각도 함께 갖고 있습니다.')
       });
     }
 
@@ -294,7 +306,8 @@
         time.unknownZone = true;
         problems.push({
           severity: 'warning', code: 'unknown-tzid',
-          message: label + ' uses TZID=' + time.tzid + ', which is not a recognised time zone. Its clock time was kept as written.'
+          message: L(label + ' uses TZID=' + time.tzid + ', which is not a recognised time zone. Its clock time was kept as written.',
+            label + ' 값이 쓰는 TZID=' + time.tzid + ' 는 인식되지 않는 시간대입니다. 적힌 시각을 그대로 유지했습니다.')
         });
       }
     } else {
@@ -330,17 +343,27 @@
   function displayFormatter(tz) {
     var key = tz || '__none__';
     if (!displayFmtCache[key]) {
-      displayFmtCache[key] = new Intl.DateTimeFormat('en-US', {
-        timeZone: tz || undefined,
-        hour12: true, hour: 'numeric', minute: '2-digit',
-        weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
-        timeZoneName: 'short'
-      });
+      displayFmtCache[key] = new Intl.DateTimeFormat(localeTag(), isKo()
+        ? {
+          timeZone: tz || undefined,
+          hour12: false, hour: '2-digit', minute: '2-digit',
+          weekday: 'short', month: 'long', day: 'numeric', year: 'numeric',
+          timeZoneName: 'short'
+        }
+        : {
+          timeZone: tz || undefined,
+          hour12: true, hour: 'numeric', minute: '2-digit',
+          weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
+          timeZoneName: 'short'
+        });
     }
     return displayFmtCache[key];
   }
 
   function wallLabel(y, mo, d, h, mi) {
+    if (isKo()) {
+      return { date: y + '년 ' + MONTHS_KO[(mo - 1) % 12] + ' ' + d + '일', time: pad2(h) + ':' + pad2(mi) };
+    }
     var date = MONTHS[(mo - 1) % 12] + ' ' + d + ', ' + y;
     var hour12 = h % 12 === 0 ? 12 : h % 12;
     var time = hour12 + ':' + pad2(mi) + ' ' + (h < 12 ? 'AM' : 'PM');
@@ -356,12 +379,14 @@
     mode = mode || 'event';
 
     if (time.kind === 'date') {
-      var wd = WEEKDAYS[new Date(Date.UTC(time.y, time.mo - 1, time.d)).getUTCDay()];
+      var wd = (isKo() ? WEEKDAYS_KO : WEEKDAYS)[new Date(Date.UTC(time.y, time.mo - 1, time.d)).getUTCDay()];
       return {
         isDate: true,
-        date: MONTHS[time.mo - 1] + ' ' + time.d + ', ' + time.y,
+        date: isKo()
+          ? time.y + '년 ' + MONTHS_KO[time.mo - 1] + ' ' + time.d + '일'
+          : MONTHS[time.mo - 1] + ' ' + time.d + ', ' + time.y,
         weekday: wd,
-        time: 'All day',
+        time: L('All day', '종일'),
         zone: '',
         iso: time.y + '-' + pad2(time.mo) + '-' + pad2(time.d)
       };
@@ -381,9 +406,13 @@
       // A flat "GMT+9" is less useful than the IANA name; show both when short.
       return {
         isDate: false,
-        date: map.month + ' ' + map.day + ', ' + map.year,
+        date: isKo()
+          ? map.year.replace(/[^0-9]/g, '') + '년 ' + map.month + ' ' + map.day + '일'
+          : map.month + ' ' + map.day + ', ' + map.year,
         weekday: map.weekday + '',
-        time: map.hour + ':' + map.minute + ' ' + map.dayPeriod,
+        time: isKo()
+          ? map.hour + ':' + map.minute
+          : map.hour + ':' + map.minute + ' ' + map.dayPeriod,
         zone: zoneName,
         iso: formatISO(time)
       };
@@ -393,7 +422,7 @@
     return {
       isDate: false,
       date: label.date,
-      weekday: WEEKDAYS[new Date(Date.UTC(time.y, time.mo - 1, time.d)).getUTCDay()],
+      weekday: (isKo() ? WEEKDAYS_KO : WEEKDAYS)[new Date(Date.UTC(time.y, time.mo - 1, time.d)).getUTCDay()],
       time: label.time,
       zone: '',
       iso: formatISO(time)
@@ -426,7 +455,7 @@
     if (time.kind === 'date') return '';
     if (time.isUtc) return 'UTC';
     if (time.tzid) return time.tzid;
-    return 'Floating (local to reader)';
+    return L('Floating (local to reader)', '떠 있는 시각 (읽는 사람의 현지 시각)');
   }
 
   function formatRange(start, end) {
@@ -445,11 +474,17 @@
   function formatDuration(ms) {
     if (ms == null) return '';
     var totalMinutes = Math.round(ms / 60000);
-    if (totalMinutes < 1) return 'less than a minute';
+    if (totalMinutes < 1) return L('less than a minute', '1분 미만');
     var days = Math.floor(totalMinutes / 1440);
     var hours = Math.floor((totalMinutes % 1440) / 60);
     var minutes = totalMinutes % 60;
     var parts = [];
+    if (isKo()) {
+      if (days) parts.push(days + '일');
+      if (hours) parts.push(hours + '시간');
+      if (minutes) parts.push(minutes + '분');
+      return parts.join(' ');
+    }
     if (days) parts.push(days + (days === 1 ? ' day' : ' days'));
     if (hours) parts.push(hours + (hours === 1 ? ' hour' : ' hours'));
     if (minutes) parts.push(minutes + (minutes === 1 ? ' minute' : ' minutes'));
@@ -488,39 +523,56 @@
       SECONDLY: 'second', MINUTELY: 'minute', HOURLY: 'hour',
       DAILY: 'day', WEEKLY: 'week', MONTHLY: 'month', YEARLY: 'year'
     };
+    var freqKo = {
+      SECONDLY: '초', MINUTELY: '분', HOURLY: '시간',
+      DAILY: '일', WEEKLY: '주', MONTHLY: '개월', YEARLY: '년'
+    };
     var unit = freqWords[rule.FREQ];
     if (!unit) return raw;
     var text = interval === 1 ? 'Every ' + unit : 'Every ' + interval + ' ' + unit + 's';
+    if (isKo()) {
+      text = interval === 1 ? '매' + freqKo[rule.FREQ] : freqKo[rule.FREQ] + '마다 ' + interval + '회';
+      if (rule.FREQ === 'WEEKLY') text = interval === 1 ? '매주' : interval + '주마다';
+      if (rule.FREQ === 'DAILY') text = interval === 1 ? '매일' : interval + '일마다';
+      if (rule.FREQ === 'MONTHLY') text = interval === 1 ? '매월' : interval + '개월마다';
+      if (rule.FREQ === 'YEARLY') text = interval === 1 ? '매년' : interval + '년마다';
+    }
 
     if (rule.BYDAY) {
       var days = rule.BYDAY.split(',').map(function (d) {
         var code = d.trim().toUpperCase().replace(/^[+-]?\d+/, '');
+        if (isKo()) return (WEEKDAY_NAMES_KO[code] || code) + '요일';
         return WEEKDAY_NAMES[code] || code;
       });
       if (rule.FREQ === 'WEEKLY') {
-        text = (interval === 1 ? 'Every week' : 'Every ' + interval + ' weeks') + ' on ' + days.join(', ');
+        text = isKo()
+          ? (interval === 1 ? '매주 ' : interval + '주마다 ') + days.join(', ')
+          : (interval === 1 ? 'Every week' : 'Every ' + interval + ' weeks') + ' on ' + days.join(', ');
       } else if (rule.FREQ === 'MONTHLY') {
-        text += ' on ' + days.join(', ');
+        text += isKo() ? ' ' + days.join(', ') : ' on ' + days.join(', ');
       } else {
-        text += ' on ' + days.join(', ');
+        text += isKo() ? ' ' + days.join(', ') : ' on ' + days.join(', ');
       }
     }
     if (rule.BYMONTHDAY) {
-      var daysOfMonth = rule.BYMONTHDAY.split(',').map(function (d) { return 'the ' + ordinal(parseInt(d, 10)); });
-      text += ' on ' + daysOfMonth.join(', ');
+      var daysOfMonth = rule.BYMONTHDAY.split(',').map(function (d) {
+        var n = parseInt(d, 10);
+        return isKo() ? n + '일' : 'the ' + ordinal(n);
+      });
+      text += isKo() ? ' ' + daysOfMonth.join(', ') : ' on ' + daysOfMonth.join(', ');
     }
     if (rule.BYMONTH) {
       var months = rule.BYMONTH.split(',').map(function (m) {
         var n = parseInt(m, 10);
-        return MONTHS_LONG[(n - 1 + 12) % 12];
+        return isKo() ? MONTHS_KO[(n - 1 + 12) % 12] : MONTHS_LONG[(n - 1 + 12) % 12];
       });
-      text += ' in ' + months.join(', ');
+      text += isKo() ? ' ' + months.join(', ') + '에' : ' in ' + months.join(', ');
     }
     if (rule.COUNT) {
       var count = parseInt(rule.COUNT, 10);
-      text += ' · ' + count + ' occurrences';
+      text += isKo() ? ' · ' + count + '회' : ' · ' + count + ' occurrences';
     }
-    if (rule.UNTIL) text += ' · until ' + untilLabel(rule.UNTIL);
+    if (rule.UNTIL) text += isKo() ? ' · ' + untilLabel(rule.UNTIL) + '까지' : ' · until ' + untilLabel(rule.UNTIL);
     return text;
   }
 
@@ -552,7 +604,8 @@
       if (!cl) {
         findings.push({
           severity: 'error', code: 'malformed-line',
-          message: 'Line ' + entry.line + ' is not a valid iCalendar content line (no ":" separator).',
+          message: L('Line ' + entry.line + ' is not a valid iCalendar content line (no ":" separator).',
+            entry.line + '행이 올바른 iCalendar 내용 줄이 아닙니다 (":" 구분자 없음).'),
           line: entry.line
         });
         continue;
@@ -574,7 +627,8 @@
         if (top === root) {
           findings.push({
             severity: 'error', code: 'end-without-begin',
-            message: 'Line ' + entry.line + ' closes ' + want + ' but no component is open there.',
+            message: L('Line ' + entry.line + ' closes ' + want + ' but no component is open there.',
+              entry.line + '행이 ' + want + '를 닫지만 그 위치에 열린 구성 요소가 없습니다.'),
             line: entry.line
           });
           continue;
@@ -582,8 +636,9 @@
         if (top.name !== want) {
           findings.push({
             severity: 'error', code: 'mismatched-end',
-            message: 'Line ' + entry.line + ' closes ' + want + ' while ' + top.name +
+            message: L('Line ' + entry.line + ' closes ' + want + ' while ' + top.name +
               ' (opened on line ' + top.line + ') was still open.',
+              entry.line + '행이 ' + want + '를 닫지만 ' + top.name + '(줄 ' + top.line + '에서 열림)이 아직 열려 있습니다.'),
             line: entry.line
           });
           while (stack.length > 1 && stack[stack.length - 1].name !== want) stack.pop();
@@ -603,7 +658,8 @@
       var unclosed = stack.pop();
       findings.push({
         severity: 'error', code: 'unclosed-component',
-        message: unclosed.name + ' opened on line ' + unclosed.line + ' is never closed with END:' + unclosed.name + '.',
+        message: L(unclosed.name + ' opened on line ' + unclosed.line + ' is never closed with END:' + unclosed.name + '.',
+          unclosed.line + '행에서 열린 ' + unclosed.name + '가 END:' + unclosed.name + '로 닫히지 않았습니다.'),
         line: unclosed.line
       });
     }
@@ -611,8 +667,10 @@
     if (unfolded.overlong.length) {
       findings.push({
         severity: 'warning', code: 'overlong-lines',
-        message: unfolded.overlong.length + ' line(s) are longer than the 75-octet limit RFC 5545 sets, so strict parsers may reject the file. First at line ' +
+        message: L(unfolded.overlong.length + ' line(s) are longer than the 75-octet limit RFC 5545 sets, so strict parsers may reject the file. First at line ' +
           unfolded.overlong[0].line + ' (' + unfolded.overlong[0].bytes + ' octets).',
+          'RFC 5545가 정한 75옥텟 제한을 넘는 줄이 ' + unfolded.overlong.length + '개 있습니다. 엄격한 해석기는 파일을 거부할 수 있습니다. 첫 줄은 ' +
+          unfolded.overlong[0].line + '행 (' + unfolded.overlong[0].bytes + '옥텟)입니다.'),
         line: unfolded.overlong[0].line
       });
     }
@@ -623,7 +681,8 @@
     if (!calendars.length) {
       findings.push({
         severity: 'error', code: 'missing-vcalendar',
-        message: 'No BEGIN:VCALENDAR block was found. This does not look like an iCalendar file.'
+        message: L('No BEGIN:VCALENDAR block was found. This does not look like an iCalendar file.',
+          'BEGIN:VCALENDAR 블록을 찾지 못했습니다. iCalendar 파일로 보이지 않습니다.')
       });
       if (strayComponents.length) {
         // Some feeds omit the wrapper: still try to read the events inside.
@@ -711,7 +770,8 @@
       if (!parsedStart) {
         issues.push({
           severity: 'error', code: 'invalid-dtstart',
-          message: 'DTSTART "' + startProp.value + '" is not a valid iCalendar date or date-time.'
+          message: L('DTSTART "' + startProp.value + '" is not a valid iCalendar date or date-time.',
+            'DTSTART "' + startProp.value + '" 값이 올바른 iCalendar 날짜·시각이 아닙니다.')
         });
       } else {
         var r = resolveTime(parsedStart, startProp.params, 'DTSTART');
@@ -721,7 +781,8 @@
     } else {
       issues.push({
         severity: 'error', code: 'missing-dtstart',
-        message: 'This event has no DTSTART property, so it has no date to show.'
+        message: L('This event has no DTSTART property, so it has no date to show.',
+          '이 일정에는 DTSTART가 없어 표시할 날짜가 없습니다.')
       });
     }
 
@@ -730,7 +791,8 @@
       if (!parsedEnd) {
         issues.push({
           severity: 'error', code: 'invalid-dtend',
-          message: 'DTEND "' + endProp.value + '" is not a valid iCalendar date or date-time.'
+          message: L('DTEND "' + endProp.value + '" is not a valid iCalendar date or date-time.',
+            'DTEND "' + endProp.value + '" 값이 올바른 iCalendar 날짜·시각이 아닙니다.')
         });
       } else {
         var re = resolveTime(parsedEnd, endProp.params, 'DTEND');
@@ -742,7 +804,8 @@
       if (ms == null) {
         issues.push({
           severity: 'warning', code: 'invalid-duration',
-          message: 'DURATION "' + durationProp.value + '" could not be read.'
+          message: L('DURATION "' + durationProp.value + '" could not be read.',
+            'DURATION "' + durationProp.value + '" 값을 읽지 못했습니다.')
         });
       } else if (start) {
         var endMs = start.utcMs + ms;
@@ -759,7 +822,8 @@
     if (start && end && end.utcMs < start.utcMs) {
       issues.push({
         severity: 'warning', code: 'end-before-start',
-        message: 'DTEND is earlier than DTSTART (' + formatISO(end) + ' < ' + formatISO(start) + '), so the event shows a negative duration.'
+        message: L('DTEND is earlier than DTSTART (' + formatISO(end) + ' < ' + formatISO(start) + '), so the event shows a negative duration.',
+          'DTEND가 DTSTART보다 빠릅니다 (' + formatISO(end) + ' < ' + formatISO(start) + '). 그래서 소요 시간이 음수로 계산됩니다.')
       });
     }
 
@@ -770,7 +834,8 @@
     if (rruleProp && !rrule) {
       issues.push({
         severity: 'error', code: 'invalid-rrule',
-        message: 'RRULE "' + rruleProp.value + '" has no FREQ part and cannot be interpreted.'
+        message: L('RRULE "' + rruleProp.value + '" has no FREQ part and cannot be interpreted.',
+          'RRULE "' + rruleProp.value + '" 값에 FREQ가 없어 해석할 수 없습니다.')
       });
     }
 
@@ -778,7 +843,8 @@
     if (status && ['TENTATIVE', 'CONFIRMED', 'CANCELLED'].indexOf(status) === -1) {
       issues.push({
         severity: 'warning', code: 'unknown-status',
-        message: 'STATUS "' + status + '" is not one of TENTATIVE, CONFIRMED or CANCELLED.'
+        message: L('STATUS "' + status + '" is not one of TENTATIVE, CONFIRMED or CANCELLED.',
+          'STATUS "' + status + '" 값이 TENTATIVE, CONFIRMED, CANCELLED 중 하나가 아닙니다.')
       });
     }
 
@@ -863,77 +929,87 @@
     var events = parsed.events || [];
 
     parsed.findings.forEach(function (f) {
-      checks.push(check(f.code + ':' + (f.line || 0), 'File structure', f.severity,
+      checks.push(check(f.code + ':' + (f.line || 0), L('File structure', '파일 구조'), f.severity,
         f.severity === 'error' ? 'error' : 'warn', f.message));
     });
 
     if (parsed.implicitCalendar) {
-      checks.push(check('implicit-calendar', 'VCALENDAR wrapper', 'warning', 'warn',
-        'The file has VEVENT blocks without a surrounding BEGIN:VCALENDAR wrapper. Events were read anyway, but strict calendar apps may refuse it.'));
+      checks.push(check('implicit-calendar', L('VCALENDAR wrapper', 'VCALENDAR 껍데기'), 'warning', 'warn',
+        L('The file has VEVENT blocks without a surrounding BEGIN:VCALENDAR wrapper. Events were read anyway, but strict calendar apps may refuse it.',
+          '파일에 BEGIN:VCALENDAR로 감싸지 않은 VEVENT 블록이 있습니다. 일정은 읽었지만 엄격한 달력 앱은 거부할 수 있습니다.')));
     }
 
     var cal = parsed.calendar || {};
 
     if (!cal.version) {
       checks.push(check('version-missing', 'VERSION:2.0', 'error', 'error',
-        'The calendar declares no VERSION property. RFC 5545 requires VERSION:2.0.'));
+        L('The calendar declares no VERSION property. RFC 5545 requires VERSION:2.0.',
+          '달력에 VERSION 항목이 없습니다. RFC 5545는 VERSION:2.0을 요구합니다.')));
     } else if (cal.version !== '2.0') {
       checks.push(check('version-value', 'VERSION:2.0', 'error', 'error',
-        'VERSION is "' + cal.version + '" but calendar data must be 2.0.'));
+        L('VERSION is "' + cal.version + '" but calendar data must be 2.0.',
+          'VERSION이 "' + cal.version + '"이지만 달력 데이터는 2.0이어야 합니다.')));
     } else {
-      checks.push(check('version-ok', 'VERSION:2.0', 'error', 'pass', 'Version 2.0 is declared.'));
+      checks.push(check('version-ok', 'VERSION:2.0', 'error', 'pass', L('Version 2.0 is declared.', 'VERSION:2.0이 선언되어 있습니다.')));
     }
 
     if (!cal.prodid) {
       checks.push(check('prodid-missing', 'PRODID', 'warning', 'warn',
-        'PRODID (the identifier of the program that wrote the file) is missing. RFC 5545 requires it.'));
+        L('PRODID (the identifier of the program that wrote the file) is missing. RFC 5545 requires it.',
+          'PRODID(파일을 만든 프로그램 식별자)가 없습니다. RFC 5545는 이를 요구합니다.')));
     } else {
       checks.push(check('prodid-ok', 'PRODID', 'warning', 'pass', cal.prodid));
     }
 
     if (cal.calscale && cal.calscale.toUpperCase() !== 'GREGORIAN') {
       checks.push(check('calscale', 'CALSCALE', 'warning', 'warn',
-        'CALSCALE is "' + cal.calscale + '". Only Gregorian dates are supported for display.'));
+        L('CALSCALE is "' + cal.calscale + '". Only Gregorian dates are supported for display.',
+          'CALSCALE이 "' + cal.calscale + '"입니다. 표시는 그레고리력 날짜만 지원합니다.')));
     }
 
     if (!events.length) {
-      checks.push(check('no-events', 'Events', 'error', 'error',
+      checks.push(check('no-events', L('Events', '일정'), 'error', 'error',
         parsed.implicitCalendar || parsed.findings.length
-          ? 'No VEVENT could be read from this file.'
-          : 'The file is valid iCalendar but contains no VEVENT components.'));
+          ? L('No VEVENT could be read from this file.', '이 파일에서 읽을 수 있는 VEVENT가 없습니다.')
+          : L('The file is valid iCalendar but contains no VEVENT components.', '올바른 iCalendar이지만 VEVENT 구성 요소가 없습니다.')));
     } else {
-      checks.push(check('events-found', 'Events', 'error', 'pass',
-        events.length + ' event' + (events.length === 1 ? '' : 's') + ' found.'));
+      checks.push(check('events-found', L('Events', '일정'), 'error', 'pass',
+        L(events.length + ' event' + (events.length === 1 ? '' : 's') + ' found.', '일정 ' + events.length + '개를 찾았습니다.')));
     }
 
     var missingUid = events.filter(function (e) { return !e.uid; });
     if (missingUid.length) {
       checks.push(check('uid-missing', 'UID', 'warning', 'warn',
-        missingUid.length + ' of ' + events.length + ' event(s) have no UID. Calendars use UID to update an event later; without it duplicates appear.'));
+        L(missingUid.length + ' of ' + events.length + ' event(s) have no UID. Calendars use UID to update an event later; without it duplicates appear.',
+          '일정 ' + events.length + '개 중 ' + missingUid.length + '개에 UID가 없습니다. 달력은 나중에 일정을 수정할 때 UID를 쓰며, 없으면 중복이 생깁니다.')));
     } else if (events.length) {
-      checks.push(check('uid-ok', 'UID', 'warning', 'pass', 'Every event has a UID.'));
+      checks.push(check('uid-ok', 'UID', 'warning', 'pass', L('Every event has a UID.', '모든 일정에 UID가 있습니다.')));
     }
 
     if (parsed.duplicateUids && parsed.duplicateUids.length) {
-      checks.push(check('uid-duplicate', 'Unique UID', 'warning', 'warn',
-        'The same UID appears more than once (' + parsed.duplicateUids.slice(0, 3).join(', ') +
-        (parsed.duplicateUids.length > 3 ? '…' : '') + '). A calendar app would treat these as the same event.'));
+      checks.push(check('uid-duplicate', L('Unique UID', 'UID 중복'), 'warning', 'warn',
+        L('The same UID appears more than once (' + parsed.duplicateUids.slice(0, 3).join(', ') +
+          (parsed.duplicateUids.length > 3 ? '…' : '') + '). A calendar app would treat these as the same event.',
+          '같은 UID가 여러 번 나옵니다 (' + parsed.duplicateUids.slice(0, 3).join(', ') +
+          (parsed.duplicateUids.length > 3 ? '…' : '') + '). 달력 앱은 이를 같은 일정으로 봅니다.')));
     }
 
     var missingStamp = events.filter(function (e) { return !e.dtstamp; });
     if (missingStamp.length) {
       checks.push(check('dtstamp-missing', 'DTSTAMP', 'warning', 'warn',
-        missingStamp.length + ' event(s) have no DTSTAMP, the time the event was created or last changed.'));
+        L(missingStamp.length + ' event(s) have no DTSTAMP, the time the event was created or last changed.',
+          '일정 ' + missingStamp.length + '개에 DTSTAMP(만들거나 마지막으로 바꾼 시각)가 없습니다.')));
     } else if (events.length) {
-      checks.push(check('dtstamp-ok', 'DTSTAMP', 'warning', 'pass', 'Every event carries a DTSTAMP.'));
+      checks.push(check('dtstamp-ok', 'DTSTAMP', 'warning', 'pass', L('Every event carries a DTSTAMP.', '모든 일정에 DTSTAMP가 있습니다.')));
     }
 
     var invalidStamps = events.filter(function (e) {
       return e.dtstamp && !parseDateValue(e.dtstamp);
     });
     if (invalidStamps.length) {
-      checks.push(check('dtstamp-format', 'DTSTAMP format', 'error', 'error',
-        invalidStamps.length + ' DTSTAMP value(s) are not valid UTC date-times (the first is "' + invalidStamps[0].dtstamp + '").'));
+      checks.push(check('dtstamp-format', L('DTSTAMP format', 'DTSTAMP 형식'), 'error', 'error',
+        L(invalidStamps.length + ' DTSTAMP value(s) are not valid UTC date-times (the first is "' + invalidStamps[0].dtstamp + '").',
+          'DTSTAMP 값 ' + invalidStamps.length + '개가 올바른 UTC 날짜·시각이 아닙니다 (첫 값은 "' + invalidStamps[0].dtstamp + '").')));
     }
 
     var issueCount = 0;
@@ -942,20 +1018,23 @@
       ev.issues.forEach(function (issue) {
         issueCount++;
         if (issue.severity === 'error') errorCount++;
-        var title = 'Event ' + ev.index + (ev.summary ? ' · ' + truncate(ev.summary, 48) : '');
+        var title = L('Event ', '일정 ') + ev.index + (ev.summary ? ' · ' + truncate(ev.summary, 48) : '');
         checks.push(check(issue.code + ':event-' + ev.index, title, issue.severity,
           issue.severity === 'error' ? 'error' : 'warn', issue.message));
       });
     });
 
     if (events.length && !issueCount) {
-      checks.push(check('event-fields-ok', 'Event fields', 'error', 'pass',
-        'All events contain the fields RFC 5545 requires (DTSTART, UID, DTSTAMP) in a readable format.'));
+      checks.push(check('event-fields-ok', L('Event fields', '일정 항목'), 'error', 'pass',
+        L('All events contain the fields RFC 5545 requires (DTSTART, UID, DTSTAMP) in a readable format.',
+          '모든 일정에 RFC 5545가 요구하는 항목(DTSTART, UID, DTSTAMP)이 읽을 수 있는 형식으로 들어 있습니다.')));
     }
 
     var recurring = events.filter(function (e) { return e.recurring; }).length;
-    checks.push(check('recurrence', 'Recurrence rules', 'warning', 'pass',
-      recurring ? recurring + ' recurring event(s) with a readable RRULE.' : 'No recurring events in this file.'));
+    checks.push(check('recurrence', L('Recurrence rules', '반복 규칙'), 'warning', 'pass',
+      recurring
+        ? L(recurring + ' recurring event(s) with a readable RRULE.', '반복 일정 ' + recurring + '개에 읽을 수 있는 RRULE이 있습니다.')
+        : L('No recurring events in this file.', '이 파일에는 반복 일정이 없습니다.')));
 
     var unknownZones = {};
     events.forEach(function (ev) {
@@ -964,10 +1043,11 @@
     });
     var zoneNames = Object.keys(unknownZones);
     if (zoneNames.length) {
-      checks.push(check('tz-unknown', 'Time zones', 'warning', 'warn',
-        'Unrecognised time zone(s): ' + zoneNames.join(', ') + '. Times in those zones are shown as written.'));
+      checks.push(check('tz-unknown', L('Time zones', '시간대'), 'warning', 'warn',
+        L('Unrecognised time zone(s): ' + zoneNames.join(', ') + '. Times in those zones are shown as written.',
+          '인식되지 않는 시간대: ' + zoneNames.join(', ') + '. 해당 시간대의 시각은 적힌 그대로 표시합니다.')));
     } else if (events.length) {
-      checks.push(check('tz-ok', 'Time zones', 'warning', 'pass', 'Every TZID resolves to a real time zone.'));
+      checks.push(check('tz-ok', L('Time zones', '시간대'), 'warning', 'pass', L('Every TZID resolves to a real time zone.', '모든 TZID가 실제 시간대로 해석됩니다.')));
     }
 
     var errors = checks.filter(function (c) { return c.status === 'error'; });
@@ -1717,6 +1797,8 @@
     parseContentLine: parseContentLine,
     utf8Length: utf8Length,
     localTimeZone: localTimeZone,
+    setLocale: setLocale,
+    locale: function () { return LOCALE; },
     SAMPLE_ICS: SAMPLE_ICS
   };
 

@@ -10,6 +10,18 @@
 
   var $ = function (id) { return document.getElementById(id); };
 
+  /* ---- KO / EN -------------------------------------------------------- */
+  function t(en) { return (window.OneTapLang && window.OneTapLang.t) ? window.OneTapLang.t(en) : en; }
+  function L(en, ko) { return (window.OneTapLang && window.OneTapLang.isKo && window.OneTapLang.isKo()) ? ko : en; }
+
+  /* Event STATUS in the reader's language: CONFIRMED / TENTATIVE / CANCELLED. */
+  var STATUS_KO = { CONFIRMED: '확정', TENTATIVE: '미정', CANCELLED: '취소' };
+  function statusText(status) {
+    if (!status) return '';
+    if (L('en', 'ko') === 'ko' && STATUS_KO[status]) return STATUS_KO[status];
+    return status.charAt(0) + status.slice(1).toLowerCase();
+  }
+
   var ICONS = {
     chevron: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>',
     pin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s7-6.1 7-11a7 7 0 1 0-14 0c0 4.9 7 11 7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg>',
@@ -75,12 +87,13 @@
     var report = combinedReport();
     if (count) {
       if (!options.quiet) {
-        toast(count + (count === 1 ? ' event' : ' events') + ' read from ' + describeSources());
+        toast(L(count + (count === 1 ? ' event' : ' events') + ' read from ' + describeSources(),
+          count + '개 일정을 읽었습니다 — ' + describeSources()));
       }
       if (report.status === 'error') setTab('validation');
     } else {
       setTab('validation');
-      toast('No events found — open the validation report for details');
+      toast(t('No events found — open the validation report for details'));
     }
   }
 
@@ -103,9 +116,9 @@
   }
 
   function describeSources() {
-    if (state.isSample) return 'the sample calendar';
-    if (state.files.length === 1) return state.files[0].name || 'your file';
-    return state.files.length + ' files';
+    if (state.isSample) return L('the sample calendar', '예시 달력');
+    if (state.files.length === 1) return state.files[0].name || L('your file', '내 파일');
+    return state.files.length + L(' files', '개 파일');
   }
 
   function loadSample() {
@@ -122,7 +135,7 @@
     state.query = '';
     $('search').value = '';
     renderAll();
-    toast('Cleared');
+    toast(t('Cleared'));
   }
 
   /* ------------------------------------------------------------------ */
@@ -152,17 +165,17 @@
   function renderSourceBar() {
     var label;
     if (state.isSample) label = 'sample.ics';
-    else if (state.files.length === 1) label = state.files[0].name || 'pasted text';
-    else label = state.files.length + ' calendars merged';
+    else if (state.files.length === 1) label = state.files[0].name || L('pasted text', '붙여넣은 텍스트');
+    else label = state.files.length + L(' calendars merged', '개 달력 합침');
     $('source-name').textContent = label;
 
     var badge = $('sample-badge');
     badge.hidden = !state.isSample;
 
     var meta = [];
-    meta.push(state.files.length + (state.files.length === 1 ? ' file' : ' files'));
-    meta.push('read in this tab');
-    if (state.isSample) meta.push('demo data');
+    meta.push(state.files.length + (state.files.length === 1 ? L(' file', '개 파일') : L(' files', '개 파일')));
+    meta.push(t('read in this tab'));
+    if (state.isSample) meta.push(t('demo data'));
     $('source-meta').textContent = meta.join(' · ');
   }
 
@@ -171,8 +184,8 @@
     $('stat-events').textContent = formatNumber(s.total);
     var view = state.view && state.view.meta;
     $('stat-events-sub').textContent = view && view.occurrences
-      ? view.occurrences + ' occurrences · ' + s.recurring + ' repeating'
-      : s.allDay + ' all-day · ' + s.timed + ' timed';
+      ? view.occurrences + L(' occurrences · ', '회 · ') + s.recurring + L(' repeating', '개 반복')
+      : s.allDay + L(' all-day · ', '개 종일 · ') + s.timed + L(' timed', '개 시간 지정');
 
     if (s.startMs != null) {
       var a = C.formatTime(msToTime(s.startMs), state.tzMode);
@@ -182,7 +195,7 @@
       $('stat-range').textContent = sameDay
         ? a.date
         : (sameYear ? a.date.replace(/,\s*\d{4}$/, '') + ' – ' + b.date : a.date + ' – ' + b.date);
-      $('stat-range-sub').textContent = sameDay ? (a.isDate ? 'All-day range' : '') : 'first start → last end';
+      $('stat-range-sub').textContent = sameDay ? (a.isDate ? t('All-day range') : '') : t('first start → last end');
     } else {
       $('stat-range').textContent = '—';
       $('stat-range-sub').textContent = '';
@@ -190,22 +203,23 @@
 
     $('stat-recurring').textContent = formatNumber(s.recurring);
     $('stat-recurring').parentNode.querySelector('.stat-sub').textContent =
-      s.recurring === 1 ? 'event with an RRULE' : 'events with an RRULE';
+      s.recurring === 1 ? t('event with an RRULE') : t('events with an RRULE');
 
-    $('stat-zones').textContent = s.timezones.length ? String(s.timezones.length) : 'None';
+    $('stat-zones').textContent = s.timezones.length ? String(s.timezones.length) : t('None');
     $('stat-zones-sub').textContent = s.timezones.length
       ? s.timezones.slice(0, 2).join(', ') + (s.timezones.length > 2 ? ' +' + (s.timezones.length - 2) : '')
-      : 'Floating or all-day only';
+      : t('Floating or all-day only');
 
     var report = combinedReport();
     var val = $('stat-validation');
-    val.textContent = report.status === 'pass' ? 'Passed'
-      : report.status === 'warning' ? report.counts.warning + ' warning' + (report.counts.warning === 1 ? '' : 's')
-      : report.counts.error + ' error' + (report.counts.error === 1 ? '' : 's');
+    val.textContent = report.status === 'pass' ? t('Passed')
+      : report.status === 'warning'
+        ? L(report.counts.warning + (report.counts.warning === 1 ? ' warning' : ' warnings'), '경고 ' + report.counts.warning)
+        : L(report.counts.error + (report.counts.error === 1 ? ' error' : ' errors'), '오류 ' + report.counts.error);
     val.className = 'stat-value small';
     val.style.color = report.status === 'pass' ? 'var(--green)'
       : report.status === 'warning' ? 'var(--amber)' : 'var(--red)';
-    $('stat-validation-sub').textContent = report.counts.total + ' checks run';
+    $('stat-validation-sub').textContent = L(report.counts.total + ' checks run', '검사 ' + report.counts.total + '개');
   }
 
   function msToTime(ms) {
@@ -267,15 +281,15 @@
     var copy = document.createElement('div');
     copy.className = 'val-copy';
     var h = document.createElement('h3');
-    h.textContent = report.status === 'pass' ? 'No problems found'
-      : report.status === 'warning' ? 'The file is readable, with something to check'
-      : 'This file has errors';
+    h.textContent = report.status === 'pass' ? t('No problems found')
+      : report.status === 'warning' ? t('The file is readable, with something to check')
+      : t('This file has errors');
     var p = document.createElement('p');
     p.textContent = report.status === 'pass'
-      ? 'Every required property is present and every date, time zone and recurrence rule could be read.'
+      ? t('Every required property is present and every date, time zone and recurrence rule could be read.')
       : report.status === 'warning'
-        ? 'Events were read successfully. The warnings below may still cause duplicates or shifted times when the file is imported somewhere else.'
-        : 'Events that could be read are shown below, but the errors listed here will break the file in a calendar app.';
+        ? t('Events were read successfully. The warnings below may still cause duplicates or shifted times when the file is imported somewhere else.')
+        : t('Events that could be read are shown below, but the errors listed here will break the file in a calendar app.');
     copy.appendChild(h);
     copy.appendChild(p);
     box.appendChild(copy);
@@ -298,9 +312,9 @@
 
     if (errors.length) list.appendChild(groupTitle('Errors'));
     errors.forEach(function (c) { list.appendChild(validationItem(c, 'error')); });
-    if (warnings.length) list.appendChild(groupTitle('Warnings'));
+    if (warnings.length) list.appendChild(groupTitle(t('Warnings')));
     warnings.forEach(function (c) { list.appendChild(validationItem(c, 'warn')); });
-    if (passes.length) list.appendChild(groupTitle('Passed checks'));
+    if (passes.length) list.appendChild(groupTitle(t('Passed checks')));
     passes.forEach(function (c) { list.appendChild(validationItem(c, 'pass')); });
 
     var issues = report.counts.error + report.counts.warning;
@@ -386,14 +400,17 @@
   }
 
   function whenText(ev) {
-    if (!ev.start) return { primary: 'No date', secondary: 'DTSTART missing' };
+    if (!ev.start) return { primary: t('No date'), secondary: t('DTSTART missing') };
     var s = C.formatTime(ev.start, state.tzMode);
     var e = ev.end ? C.formatTime(ev.end, state.tzMode) : null;
     var zone = s.zone ? ' ' + s.zone : '';
 
+    var ko = (window.OneTapLang && window.OneTapLang.isKo) ? window.OneTapLang.isKo() : false;
+    var head = ko ? (s.date + ' (' + s.weekday + ')') : (s.weekday + ', ' + s.date);
+
     if (ev.allDay) {
-      var secondary = e ? 'All-day · ends ' + e.date + ' (exclusive)' : 'All day';
-      return { primary: s.weekday + ', ' + s.date, secondary: secondary };
+      var secondary = e ? t('All-day · ends ') + e.date + t(' (exclusive)') : t('All day');
+      return { primary: head, secondary: secondary };
     }
 
     var secondary;
@@ -402,18 +419,18 @@
     } else if (s.date === e.date) {
       secondary = s.time + ' – ' + e.time + zone;
     } else {
-      secondary = s.time + ' – ' + e.weekday + ', ' + e.date + ', ' + e.time + zone;
+      secondary = s.time + ' – ' + (ko ? (e.date + ' (' + e.weekday + ')') : (e.weekday + ', ' + e.date)) + ', ' + e.time + zone;
     }
-    return { primary: s.weekday + ', ' + s.date, secondary: secondary };
+    return { primary: head, secondary: secondary };
   }
 
   function eventBadges(ev) {
     var out = [];
-    if (ev.status === 'CANCELLED') out.push(badge('Cancelled', 'badge-cancelled'));
-    if (ev.status === 'TENTATIVE') out.push(badge('Tentative', 'badge-tentative'));
-    if (ev.occurrence) out.push(badge('Occurrence ' + ev.occurrence.index + '/' + ev.occurrence.total, 'badge-occurrence'));
-    else if (ev.recurring) out.push(badge('Recurring', 'badge-recurring'));
-    if (ev.allDay) out.push(badge('All-day', 'badge-allday'));
+    if (ev.status === 'CANCELLED') out.push(badge(t('Cancelled'), 'badge-cancelled'));
+    if (ev.status === 'TENTATIVE') out.push(badge(t('Tentative'), 'badge-tentative'));
+    if (ev.occurrence) out.push(badge(L('Occurrence ', '발생 ') + ev.occurrence.index + '/' + ev.occurrence.total, 'badge-occurrence'));
+    else if (ev.recurring) out.push(badge(t('Recurring'), 'badge-recurring'));
+    if (ev.allDay) out.push(badge(t('All-day'), 'badge-allday'));
     return out;
   }
 
@@ -430,8 +447,8 @@
     var meta = state.view && state.view.meta;
     var expandedCount = meta ? (total - meta.recurring + meta.occurrences) : total;
     $('export-scope').textContent = events.length === expandedCount
-      ? (expandedCount === 1 ? 'this event' : 'all ' + expandedCount + ' rows')
-      : events.length + ' of ' + expandedCount + ' rows';
+      ? (expandedCount === 1 ? t('this event') : L('all ' + expandedCount + ' rows', '전체 ' + expandedCount + '개 행'))
+      : L(events.length + ' of ' + expandedCount + ' rows', expandedCount + '개 중 ' + events.length + '개 행');
 
     renderRepeatNote(meta, events.length);
 
@@ -442,8 +459,8 @@
       td.style.padding = '26px 16px';
       td.style.color = 'var(--muted)';
       td.textContent = state.events.length
-        ? 'No event matches this search or filter.'
-        : 'No events in this file.';
+        ? t('No event matches this search or filter.')
+        : t('No events in this file.');
       tr.appendChild(td);
       tbody.appendChild(tr);
     }
@@ -461,17 +478,18 @@
     if (!note) return;
     if (!meta || !meta.recurring) { note.hidden = true; note.textContent = ''; return; }
     var parts = [];
-    parts.push(meta.recurring + (meta.recurring === 1 ? ' repeating event' : ' repeating events') +
-      ' expanded into ' + meta.occurrences + ' dated rows');
-    if (meta.engines.ical) parts.push('ical.js expanded ' + meta.engines.ical);
-    if (meta.engines.rrule) parts.push('rrule.js expanded ' + meta.engines.rrule);
-    if (meta.engines.builtin) parts.push('built-in expander used for ' + meta.engines.builtin);
+    parts.push(L(meta.recurring + (meta.recurring === 1 ? ' repeating event' : ' repeating events') +
+      ' expanded into ' + meta.occurrences + ' dated rows',
+      '반복 일정 ' + meta.recurring + '개를 펼쳐 ' + meta.occurrences + '개 날짜 행으로 표시'));
+    if (meta.engines.ical) parts.push(L('ical.js expanded ' + meta.engines.ical, 'ical.js가 ' + meta.engines.ical + '개 펼침'));
+    if (meta.engines.rrule) parts.push(L('rrule.js expanded ' + meta.engines.rrule, 'rrule.js가 ' + meta.engines.rrule + '개 펼침'));
+    if (meta.engines.builtin) parts.push(L('built-in expander used for ' + meta.engines.builtin, '자체 확장기 ' + meta.engines.builtin + '개 사용'));
     if (meta.crossChecked) {
       parts.push(meta.mismatch
-        ? meta.mismatch + ' rule(s) disagree between engines'
-        : 'rrule.js and ical.js agree on all ' + meta.crossChecked + ' rule(s)');
+        ? L(meta.mismatch + ' rule(s) disagree between engines', '규칙 ' + meta.mismatch + '개의 해석이 엔진마다 다릅니다')
+        : L('rrule.js and ical.js agree on all ' + meta.crossChecked + ' rule(s)', 'rrule.js와 ical.js가 모든 ' + meta.crossChecked + '개 규칙에서 일치'));
     }
-    if (meta.errors.length) parts.push('could not expand: ' + meta.errors.slice(0, 2).join(', '));
+    if (meta.errors.length) parts.push(t('could not expand: ') + meta.errors.slice(0, 2).join(', '));
     note.hidden = false;
     note.textContent = parts.join(' · ');
   }
@@ -482,7 +500,7 @@
     tr.tabIndex = 0;
     if (ev.status === 'CANCELLED') tr.classList.add('is-cancelled');
     if (state.selectedId === ev.id) tr.classList.add('is-selected');
-    tr.setAttribute('aria-label', ev.summary + ', open details');
+    tr.setAttribute('aria-label', ev.summary + t(', open details'));
 
     var when = document.createElement('td');
     when.className = 'col-when';
@@ -618,46 +636,47 @@
       grid.appendChild(dd);
     }
 
-    row('When', whenText(ev).primary + ', ' + whenText(ev).secondary.replace(' (exclusive)', ''));
+    row(t('When'), whenText(ev).primary + ', ' + whenText(ev).secondary.replace(' (exclusive)', ''));
     if (ev.start && ev.start.hasTime) {
-      row('Starts', C.formatISO(ev.start) + (ev.start.tzid ? ' (' + ev.start.tzid + ')' : ''));
+      row(t('Starts'), C.formatISO(ev.start) + (ev.start.tzid ? ' (' + ev.start.tzid + ')' : ''));
     } else if (ev.start) {
-      row('Starts', C.formatISO(ev.start) + ' (all-day)');
+      row(t('Starts'), C.formatISO(ev.start) + t(' (all-day)'));
     }
     if (ev.end) {
-      row('Ends', C.formatISO(ev.end) + (ev.allDay ? ' (exclusive)' : ''));
+      row(t('Ends'), C.formatISO(ev.end) + (ev.allDay ? t(' (exclusive)') : ''));
     }
-    row('Duration', ev.durationLabel);
-    row('Status', ev.status ? ev.status.charAt(0) + ev.status.slice(1).toLowerCase() : '');
-    row('Location', ev.location);
-    if (ev.categories.length) row('Categories', ev.categories.join(', '));
+    row(t('Duration'), ev.durationLabel);
+    row(t('Status'), statusText(ev.status));
+    row(t('Location'), ev.location);
+    if (ev.categories.length) row(t('Categories'), ev.categories.join(', '));
     if (ev.occurrence) {
-      row('Occurrence', ev.occurrence.index + ' of ' + ev.occurrence.total + ' in the expanded window');
+      row(t('Occurrence'), L(ev.occurrence.index + ' of ' + ev.occurrence.total + ' in the expanded window',
+        ev.occurrence.total + '회 중 ' + ev.occurrence.index + '번째 (펼친 범위 기준)'));
     }
-    if (ev.recurrenceLabel) row('Repeats', ev.recurrenceLabel);
+    if (ev.recurrenceLabel) row(t('Repeats'), ev.recurrenceLabel);
     if (ev.rruleRaw) row('RRULE', ev.rruleRaw);
-    if (ev.organizer) row('Organizer', personLabel(ev.organizer));
+    if (ev.organizer) row(t('Organizer'), personLabel(ev.organizer));
     row('UID', ev.uid);
     if (ev.url) row('URL', ev.url);
-    row('Calendar', ev.source ? ev.source + ' · line ' + ev.line : '');
+    row(t('Calendar'), ev.source ? ev.source + t(' · line ') + ev.line : '');
     body.appendChild(grid);
 
     if (ev.description) {
-      body.appendChild(detailBlock('Description', ev.description, true));
+      body.appendChild(detailBlock(t('Description'), ev.description, true));
     }
 
     if (ev.attendees.length) {
       var block = document.createElement('div');
       block.className = 'detail-block';
       var h = document.createElement('h4');
-      h.textContent = 'Attendees (' + ev.attendees.length + ')';
+      h.textContent = L('Attendees (', '참석자 (') + ev.attendees.length + ')';
       block.appendChild(h);
       var ul = document.createElement('ul');
       ul.className = 'people';
       ev.attendees.forEach(function (a) {
         var li = document.createElement('li');
         var name = document.createElement('span');
-        name.textContent = a.name || a.email || 'Unknown';
+        name.textContent = a.name || a.email || t('Unknown');
         li.appendChild(name);
         if (a.email && a.email !== a.name) {
           var mail = document.createElement('span');
@@ -687,7 +706,7 @@
       var issues = document.createElement('div');
       issues.className = 'detail-block';
       var ih = document.createElement('h4');
-      ih.textContent = 'Issues with this event';
+      ih.textContent = t('Issues with this event');
       issues.appendChild(ih);
       var list = document.createElement('ul');
       list.className = 'dialog-issues';
@@ -780,24 +799,24 @@
 
   function exportCSV() {
     var events = visibleEvents();
-    if (!events.length) { toast('Nothing to export'); return; }
+    if (!events.length) { toast(t('Nothing to export')); return; }
     var csv = C.toCSV(events, { bom: $('csv-bom').checked });
     download(exportBase() + '.csv', csv, 'text/csv;charset=utf-8');
-    toast('CSV ready — ' + events.length + ' rows' + ($('csv-bom').checked ? ' with Excel BOM' : ''));
+    toast(L('CSV ready — ', 'CSV 준비됨 — ') + events.length + t(' rows') + ($('csv-bom').checked ? t(' with Excel BOM') : ''));
   }
 
   function exportJSON() {
     var events = visibleEvents();
-    if (!events.length) { toast('Nothing to export'); return; }
+    if (!events.length) { toast(t('Nothing to export')); return; }
     download(exportBase() + '.json', C.toJSON(events), 'application/json;charset=utf-8');
-    toast('JSON ready — ' + events.length + ' events');
+    toast(L('JSON ready — ', 'JSON 준비됨 — ') + events.length + t(' events'));
   }
 
   function copyTSV() {
     var events = visibleEvents();
-    if (!events.length) { toast('Nothing to copy'); return; }
+    if (!events.length) { toast(t('Nothing to copy')); return; }
     var text = C.toTSV(events);
-    var done = function () { toast(events.length + ' rows copied as tab-separated text'); };
+    var done = function () { toast(events.length + t(' rows copied as tab-separated text')); };
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(done).catch(function () { fallbackCopy(text, done); });
     } else {
@@ -817,7 +836,7 @@
     try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
     document.body.removeChild(ta);
     if (ok) done();
-    else toast('Copy failed — select the table and copy manually');
+    else toast(t('Copy failed — select the table and copy manually'));
   }
 
   /* ------------------------------------------------------------------ */
@@ -846,8 +865,8 @@
     var current = document.documentElement.getAttribute('data-theme');
     var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
     var isDark = current === 'dark' || (!current && prefersDark);
-    $('theme-toggle').setAttribute('aria-label', isDark ? 'Switch to light theme' : 'Switch to dark theme');
-    $('theme-toggle').title = isDark ? 'Switch to light theme' : 'Switch to dark theme';
+    $('theme-toggle').setAttribute('aria-label', isDark ? t('Switch to light theme') : t('Switch to dark theme'));
+    $('theme-toggle').title = isDark ? t('Switch to light theme') : t('Switch to dark theme');
   }
 
   function toggleTheme() {
@@ -941,7 +960,7 @@
     });
     $('paste-parse').addEventListener('click', function () {
       var text = $('paste-input').value;
-      if (!text.trim()) { toast('Paste the text of an .ics file first'); $('paste-input').focus(); return; }
+      if (!text.trim()) { toast(t('Paste the text of an .ics file first')); $('paste-input').focus(); return; }
       showPaste(false);
       loadTexts([{ name: 'pasted-calendar.ics', text: text }], { append: false });
     });
@@ -978,7 +997,7 @@
         if (meta && meta.occurrences) {
           toast(meta.occurrences + ' occurrences shown for the next ' + state.view.months + ' months');
         } else if (state.repeat === 'none') {
-          toast('Showing one row per event — repeats are listed in the detail view');
+          toast(t('Showing one row per event — repeats are listed in the detail view'));
         }
       });
     }
@@ -1013,9 +1032,32 @@
     }
   }
 
+  function currentLang() {
+    return (window.OneTapLang && window.OneTapLang.current) ? window.OneTapLang.current() : 'en';
+  }
+
+  /* Language switch: the parser builds date, duration and RRULE labels, so it
+     has to be told the language and the files re-parsed before re-rendering. */
+  function relocalize() {
+    C.setLocale(currentLang());
+    if (state.files.length) {
+      reparse();
+      renderAll();
+      if (state.selectedId) {
+        var ev = state.events.filter(function (e) { return e.id === state.selectedId; })[0];
+        if (ev && document.getElementById('event-dialog').open) openDialog(ev);
+      }
+    }
+    initTheme();
+    $('search').setAttribute('aria-label', t('Search events'));
+    $('search').setAttribute('placeholder', t('Search events, places, people…'));
+  }
+
   function init() {
+    C.setLocale(currentLang());
     initTheme();
     wire();
+    document.addEventListener('langchange', function () { relocalize(); });
     // Start with the sample calendar so the page is useful on first paint.
     loadTexts([{ name: 'sample.ics', text: C.SAMPLE_ICS }], { sample: true, append: false, quiet: true });
     setTab('events');
